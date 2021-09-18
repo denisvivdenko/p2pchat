@@ -3,14 +3,14 @@ from hashlib import sha256
 class Block:
 
 
-    def __init__(self, timestamp, data, previousHash=''):
+    def __init__(self, timestamp: str, data: str, previous_hash: str=''):
+        self.nonce: int = 0
         self.timestamp: str = timestamp
         self.data: str = data
-        self.previousHash: str = previousHash
+        self.previous_hash: str = previous_hash
         self.hash: str = self.calculate_hash();
 
     def calculate_hash(self) -> str:
         block_content = self.timestamp + self.data + \
-                            self.previousHash
-        return sha256(block_content)
-        
+                            self.previous_hash + str(self.nonce)
+        return sha256(block_content.encode('utf-8')).hexdigest()
