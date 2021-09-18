@@ -1,7 +1,7 @@
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
-from Blockchain.blockchain import Blockchain
-from Chat.user_address import UserAddress
+from blockchain.blockchain import Blockchain
+from chat.user_address import UserAddress
 from typing import Tuple
 
 class Client(DatagramProtocol):
