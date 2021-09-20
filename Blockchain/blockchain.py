@@ -1,9 +1,8 @@
-from blockchain.connection_record import ConnectionStatus
 from typing import List
 from blockchain.block import Block
 from blockchain.proof_of_work_protocol import ProofOfWorkProtocol
-from blockchain.connection_record import ConnectionRecord
-from blockchain.connection_record import ConnectionStatus
+from blockchain.connection_transaction import ConnectionTransaction
+from blockchain.connection_transaction import ConnectionStatus
 
 class Blockchain:
 
@@ -50,10 +49,12 @@ class Blockchain:
 
 if __name__ == '__main__':
     blockchain = Blockchain()
-    block_1 = Block('01/01/21', [ConnectionRecord('127.0.0.1', '8989', ConnectionStatus.CONNECTED).get_string_format()])
-    block_2 = Block('02/01/21', [ConnectionRecord('127.0.0.1', '2283', ConnectionStatus.CONNECTED).get_string_format()])
+    block_1 = Block('01/01/21', [ConnectionTransaction('127.0.0.1', '8989', ConnectionStatus.CONNECTED).get_string_format()])
+    block_2 = Block('02/01/21', [ConnectionTransaction('127.0.0.1', '2283', ConnectionStatus.CONNECTED).get_string_format()])
 
     blockchain.add_block(block_1)
     blockchain.add_block(block_2)
+
+    hash = ConnectionTransaction('127.0.0.1', '8989', ConnectionStatus.CONNECTED).calculate_hash()
 
     blockchain.is_chain_valid()
