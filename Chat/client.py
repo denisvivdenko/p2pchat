@@ -1,12 +1,13 @@
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
 from blockchain.blockchain import Blockchain
+from chat.get_request import GET
+from chat.post_request import POST
 from chat.user_address import UserAddress
 from Crypto.PublicKey import RSA
 from typing import Tuple
 import json
 import os
-import time
 
 class Client(DatagramProtocol):
 
@@ -39,8 +40,7 @@ class Client(DatagramProtocol):
     def startProtocol(self):
         # if it's not a server -> sends request to connect to the network
         if not self.is_server:
-            self.get_data((self.server_ip, self.server_port), 'pending_transactions.json')
-            # self.connect_to_network((self.server_ip, self.server_port))
+            self.connect_to_network((self.server_ip, self.server_port))
 
     def datagramReceived(self, datagram, addr: Tuple[str, int]) -> None:
         query = datagram.decode('utf-8')
@@ -49,32 +49,48 @@ class Client(DatagramProtocol):
         # checks request type (custom GET/POST methods) 
         # and process sent data OR sends requested one
         if request_type == 'GET':
-            requested_user_address: Tuple[str, int] = self.parse_query_GET_address(query)
-            requested_file_name: str = self.parse_query_GET_file(query)
+            request = GET(query)
+            requested_user_address: Tuple[str, int] = request.address_to_send
+            requested_file_name: str = request.file_name
             with open(requested_file_name, "r") as read_file:
                 data = json.load(read_file)
             self.send_data(requested_user_address, requested_file_name, json.dumps(data))
 
         elif request_type == 'POST':
-            post_file_name = self.parse_POST_file_name(query)
-            recieved_data = self.parse_POST_data(query)
+            request = POST(query)
+            post_file_name = request.file_name
+            recieved_data = request.data
             print(f'recieved: {recieved_data} \t {post_file_name}')
             with open(post_file_name, "w") as write_file:
                 write_file.write(recieved_data)
 
     def connect_to_network(self, server: Tuple[str, int]) -> None:
-        pass
-
-    def broadcast_data(self, recievers: list) -> None:
-        pass
+        """
+        This methods connects user to the network using server 
+        from which it gets information about online users
+        :param server: (server_ip, server_port)
+        """
+        self.get_data((server[0], server[1]), 'pending_transactions.json')
+        self.get_data((server[0], server[1]), 'online_users_blockchain.json')
 
     # custom realization of GET/POST methods in UDP network
     def get_data(self, address_to_request: Tuple[str, int], file_name: str) -> None:
-        query = f'GET\n{self.host}\n{self.port}\n' + file_name
+        """
+        Custom realization of GET method from HTTP protocol
+        :param address_to_request: address which requests data (ip, port)
+        :param file_name: name of the file which will be sent
+        """
+        query = GET(address_to_send=(self.host, self.port), file_name=file_name).get_query()
         self.transport.write(query.encode('utf-8'), address_to_request)
 
     def send_data(self, reciever_address: Tuple[str, int], file_name: str, data: str) -> None:
-        query = f'POST\n{file_name}\n{data}'
+        """
+        Custom realization of POST method from HTTP protocol
+        :param reciever_address: address where data will be sent
+        :param file_name: name of the file which is going to be sent
+        :param data: data itself (string)
+        """
+        query = POST(file_name=file_name, data=data).get_query()
         self.transport.write(query.encode('utf-8'), reciever_address)
 
     def parse_request_type(self, query: str):
@@ -85,23 +101,6 @@ class Client(DatagramProtocol):
             return 'POST'
 
         raise Exception(f'error: undefined request type: {request_type}')
-
-    def parse_query_GET_address(self, query: str): #TODO
-        lines = query.split('\n')
-        return lines[1].strip(), int(lines[2])
-
-    def parse_query_GET_file(self, query: str): #TODO
-        lines = query.split('\n')
-        return lines[-1]
-    
-    def parse_POST_data(self, query: str): #TODO
-        lines = query.split('\n')
-        data = '\n'.join(lines[2:])
-        return data
-
-    def parse_POST_file_name(self, query: str): #TODO
-        lines = query.split('\n')
-        return lines[1]
 
     def generate_keys(self) -> Tuple[str, str]:
         """
