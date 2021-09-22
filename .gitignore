@@ -1,4 +1,6 @@
 f/
+private.pem
+public.pem
 pending_transactions.json
 user_keys.json
 online_users_blockchain.json

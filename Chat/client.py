@@ -1,13 +1,18 @@
+from turtle import pu
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
 from blockchain.blockchain import Blockchain
+from blockchain.connection_transaction import ConnectionTransaction
+from blockchain.connection_transaction import ConnectionStatus
 from chat.get_request import GET
 from chat.post_request import POST
 from chat.user_address import UserAddress
 from Crypto.PublicKey import RSA
 from typing import Tuple
 import json
+import base64
 import os
+import time
 
 class Client(DatagramProtocol):
 
@@ -34,8 +39,9 @@ class Client(DatagramProtocol):
         self.pending_transactions: json = None
         self.online_users_blockchain: Blockchain = None
         # private / public keys init
-        self.USER_KEYS_FILE_PATH = 'user_keys.json' # file with user's keys
-        self.PRIVATE_KEY, self.PUBLIC_KEY = self.initialize_keys(self.USER_KEYS_FILE_PATH)
+        self.PRIVATE_KEY_FILE = 'private.pem'
+        self.PUBLIC_KEY_FILE = 'public.pem'
+        self.PUBLIC_KEY, self.PRIVATE_KEY = self.initialize_keys()
 
     def startProtocol(self):
         # if it's not a server -> sends request to connect to the network
@@ -72,6 +78,11 @@ class Client(DatagramProtocol):
         """
         self.get_data((server[0], server[1]), 'pending_transactions.json')
         self.get_data((server[0], server[1]), 'online_users_blockchain.json')
+        connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, time.time(), 
+                    self.host, self.port, ConnectionStatus.CONNECTED)
+        signature = connection_transaction.sign_transaction(self.PRIVATE_KEY)
+        signature = str(base64.b64encode(signature))[2:-1] # removes b' from signature
+        print(signature)
 
     # custom realization of GET/POST methods in UDP network
     def get_data(self, address_to_request: Tuple[str, int], file_name: str) -> None:
@@ -102,39 +113,48 @@ class Client(DatagramProtocol):
 
         raise Exception(f'error: undefined request type: {request_type}')
 
-    def generate_keys(self) -> Tuple[str, str]:
+    def generate_keys(self) -> Tuple[RSA.RsaKey, RSA.RsaKey]:
         """
         Generates two keys for asymmetric encryption
         :return: public_key, private_key
         """
         keys_length = 1024
         keys = RSA.generate(keys_length)
-        private_key = ''.join(keys.export_key().decode().split('\n')[1:-1])
-        public_key = ''.join(keys.publickey().export_key().decode().split('\n')[1:-1])
-        return public_key, private_key
+        # self.KEYS = keys
+        # private_key = ''.join(keys.export_key().decode().split('\n')[1:-1])
+        # public_key = ''.join(keys.publickey().export_key().decode().split('\n')[1:-1])
+        return keys.publickey(), keys
         
-    def initialize_keys(self, json_file_path: str) -> Tuple[str, str]:
+    def initialize_keys(self) -> Tuple[str, str]:
         """
         Reads JSON file with keys or if it doesn't exist then 
         it generates new keys and write them into JSON
         :return: public_key, private_key
         """
         public_key, private_key = ('','')
-        if os.path.exists(json_file_path): # if file with keys already exists -> read from JSON file
-            with open(json_file_path, "r") as read_file:
-                data = json.load(read_file)
-                public_key, private_key = data['PUBLIC_KEY'], data['PRIVATE_KEY']
-        else: # if not => generate new keys
+        if os.path.exists(self.PRIVATE_KEY_FILE) and os.path.exists(self.PUBLIC_KEY_FILE): # if file with keys already exists -> read from JSON file
+            with open(self.PRIVATE_KEY_FILE, "r") as read_file:
+                data = read_file.read()
+                private_key = RSA.importKey(data)
+
+            with open(self.PUBLIC_KEY_FILE, "r") as read_file:
+                data = read_file.read()
+                public_key = RSA.importKey(data)
+
+        else: # if not -> generate new keys
             public_key, private_key = self.generate_keys()
-            with open(json_file_path, "w") as write_file:
-                keys = { 'PUBLIC_KEY' : self.PUBLIC_KEY, 'PRIVATE_KEY': self.PRIVATE_KEY }
-                json.dump(keys, write_file)
+            with open (self.PRIVATE_KEY_FILE, "w") as private_file:
+                key_string = private_key.export_key('PEM').decode()
+                private_file.write(key_string)
+            with open (self.PUBLIC_KEY_FILE, "w") as public_file:
+                key_string = public_key.export_key('PEM').decode()
+                public_file.write(key_string)
         
         return public_key, private_key
 
 
 if __name__ == '__main__':
-    user_address = UserAddress().get_result()
-    new_client = Client('127.0.0.1', user_address[1], '127.0.0.1', 8888)
-    reactor.listenUDP(user_address[1], new_client)
+    # user_address = UserAddress().get_result()
+    new_client = Client('127.0.0.1', 8080, '127.0.0.1', 8888)
+    reactor.listenUDP(8080, new_client)
     reactor.run()
