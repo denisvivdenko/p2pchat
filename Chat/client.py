@@ -1,23 +1,14 @@
-from hashlib import sha256
-from msilib.schema import Signature
-from turtle import pu
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
 from blockchain.blockchain import Blockchain
 from blockchain.connection_transaction import ConnectionTransaction
 from blockchain.connection_transaction import ConnectionStatus
 from blockchain.signature import Signature
+from blockchain.encryption_key import EncryptionKey
 from chat.get_request import GET
 from chat.post_request import POST
-from chat.user_address import UserAddress
-from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA256
-from Crypto.Signature import pkcs1_15
-from Crypto.Signature import PKCS1_v1_5 
 from typing import Tuple
 import json
-import base64
-import os
 import time
 
 class Client(DatagramProtocol):
@@ -45,9 +36,7 @@ class Client(DatagramProtocol):
         self.pending_transactions: json = None
         self.online_users_blockchain: Blockchain = None
         # private / public keys init
-        self.PRIVATE_KEY_FILE = 'private.pem'
-        self.PUBLIC_KEY_FILE = 'public.pem'
-        self.PUBLIC_KEY, self.PRIVATE_KEY = self.initialize_keys()
+        self.PUBLIC_KEY, self.PRIVATE_KEY = EncryptionKey().get_keys()
 
     def startProtocol(self):
         # if it's not a server -> sends request to connect to the network
@@ -86,23 +75,10 @@ class Client(DatagramProtocol):
         self.get_data((server[0], server[1]), 'online_users_blockchain.json')
         connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, time.time(), 
                     self.host, self.port, ConnectionStatus.CONNECTED)
-        signature = connection_transaction.sign_transaction(self.PRIVATE_KEY)
+        signature = Signature(connection_transaction.sign_transaction(self.PRIVATE_KEY))
         transaction_hash = connection_transaction.calculate_hash()
-        answer = self.verify_signature(self.PUBLIC_KEY, signature, transaction_hash)
+        answer = signature.verify_signature(self.PUBLIC_KEY, transaction_hash)
         print(answer)
-
-    def verify_signature(self, public_key: RSA.RsaKey, signature, transaction_hash: SHA256.SHA256Hash):
-        '''
-        Verifies with a public key from whom the data came that it was indeed 
-        signed by their private key
-        param: public_key imported from pem public key importKey() method
-        param: signature 
-        param: transaction hash
-        return: Boolean. True if the signature is valid; False otherwise. 
-        '''
-        signer = PKCS1_v1_5.new(public_key) 
-        answer = signer.verify(transaction_hash, signature)
-        return answer
 
     # custom realization of GET/POST methods in UDP network
     def get_data(self, address_to_request: Tuple[str, int], file_name: str) -> None:
@@ -132,42 +108,6 @@ class Client(DatagramProtocol):
             return 'POST'
 
         raise Exception(f'error: undefined request type: {request_type}')
-
-    def generate_keys(self) -> Tuple[RSA.RsaKey, RSA.RsaKey]:
-        """
-        Generates two keys for asymmetric encryption
-        :return: public_key, private_key
-        """
-        keys_length = 1024
-        keys = RSA.generate(keys_length)
-        return keys.publickey(), keys
-        
-    def initialize_keys(self) -> Tuple[str, str]:
-        """
-        Reads JSON file with keys or if it doesn't exist then 
-        it generates new keys and write them into JSON
-        :return: public_key, private_key
-        """
-        public_key, private_key = ('','')
-        if os.path.exists(self.PRIVATE_KEY_FILE) and os.path.exists(self.PUBLIC_KEY_FILE): # if file with keys already exists -> read from JSON file
-            with open(self.PRIVATE_KEY_FILE, "r") as read_file:
-                data = read_file.read()
-                private_key = RSA.importKey(data)
-
-            with open(self.PUBLIC_KEY_FILE, "r") as read_file:
-                data = read_file.read()
-                public_key = RSA.importKey(data)
-
-        else: # if not -> generate new keys
-            public_key, private_key = self.generate_keys()
-            with open (self.PRIVATE_KEY_FILE, "w") as private_file:
-                key_string = private_key.export_key('PEM').decode()
-                private_file.write(key_string)
-            with open (self.PUBLIC_KEY_FILE, "w") as public_file:
-                key_string = public_key.export_key('PEM').decode()
-                public_file.write(key_string)
-        
-        return public_key, private_key
 
 
 if __name__ == '__main__':
