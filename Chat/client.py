@@ -6,6 +6,7 @@ from twisted.internet import reactor
 from blockchain.blockchain import Blockchain
 from blockchain.connection_transaction import ConnectionTransaction
 from blockchain.connection_transaction import ConnectionStatus
+from blockchain.signature import Signature
 from chat.get_request import GET
 from chat.post_request import POST
 from chat.user_address import UserAddress
