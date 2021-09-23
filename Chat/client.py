@@ -1,3 +1,4 @@
+from operator import pos
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
 from blockchain.blockchain import Blockchain
@@ -7,7 +8,7 @@ from blockchain.signature import Signature
 from blockchain.encryption_key import EncryptionKey
 from chat.get_request import GET
 from chat.post_request import POST
-from typing import Tuple
+from typing import List, Tuple
 import json
 import time
 
@@ -35,8 +36,14 @@ class Client(DatagramProtocol):
         # blockchain data
         self.pending_transactions: json = None
         self.online_users_blockchain: Blockchain = None
+
+        self.PENDING_TRANSACTIONS_FILE: str = 'pending_transactions.json'
+        self.ONLINE_USERS_BLOCKCHAIN_FILE: str = 'online_users_blockchain.json'
+
         # private / public keys init
         self.PUBLIC_KEY, self.PRIVATE_KEY = EncryptionKey().get_keys()
+
+        self.new_transactions: list = []
 
     def startProtocol(self):
         # if it's not a server -> sends request to connect to the network
@@ -53,9 +60,10 @@ class Client(DatagramProtocol):
             request = GET(query)
             requested_user_address: Tuple[str, int] = request.address_to_send
             requested_file_name: str = request.file_name
+            file_data = ''
             with open(requested_file_name, "r") as read_file:
-                data = json.load(read_file)
-            self.send_data(requested_user_address, requested_file_name, json.dumps(data))
+                file_data = json.load(read_file)
+            self.send_data(requested_user_address, requested_file_name, json.dumps(file_data))
 
         elif request_type == 'POST':
             request = POST(query)
@@ -65,20 +73,34 @@ class Client(DatagramProtocol):
             with open(post_file_name, "w") as write_file:
                 write_file.write(recieved_data)
 
+            self.notify_file_updated(file_name=post_file_name)
+
     def connect_to_network(self, server: Tuple[str, int]) -> None:
         """
-        This methods connects user to the network using server 
+        This methods connects user to the network using server
         from which it gets information about online users
         :param server: (server_ip, server_port)
         """
-        self.get_data((server[0], server[1]), 'pending_transactions.json')
-        self.get_data((server[0], server[1]), 'online_users_blockchain.json')
         connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, time.time(), 
                     self.host, self.port, ConnectionStatus.CONNECTED)
-        signature = Signature(connection_transaction.sign_transaction(self.PRIVATE_KEY))
-        transaction_hash = connection_transaction.calculate_hash()
-        answer = signature.verify_signature(self.PUBLIC_KEY, transaction_hash)
-        print(answer)
+        connection_transaction.sign_transaction(self.PRIVATE_KEY)
+
+        self.new_transactions.append(connection_transaction)
+
+        self.get_data((server[0], server[1]), self.PENDING_TRANSACTIONS_FILE)
+        self.get_data((server[0], server[1]), self.ONLINE_USERS_BLOCKCHAIN_FILE)
+
+    def notify_file_updated(self, file_name: str) -> None:
+        # when recieve pending transaction file it checks for new transactions
+        # if there are active transactions then add them to the file and broadcast file
+        if file_name == self.PENDING_TRANSACTIONS_FILE and self.new_transactions:
+            with open(self.PENDING_TRANSACTIONS_FILE, 'r') as file:
+                data = json.load(file)
+                for transaction in self.new_transactions:
+                    transaction_object = transaction.get_transaction_object()
+                    data['pending_transactions'].append(transaction_object)
+            with open(self.PENDING_TRANSACTIONS_FILE, 'w') as file:
+                file.write(json.dumps(data))
 
     # custom realization of GET/POST methods in UDP network
     def get_data(self, address_to_request: Tuple[str, int], file_name: str) -> None:
