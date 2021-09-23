@@ -1,3 +1,5 @@
+from hashlib import sha256
+from msilib.schema import Signature
 from turtle import pu
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor 
@@ -8,6 +10,9 @@ from chat.get_request import GET
 from chat.post_request import POST
 from chat.user_address import UserAddress
 from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256
+from Crypto.Signature import pkcs1_15
+from Crypto.Signature import PKCS1_v1_5 
 from typing import Tuple
 import json
 import base64
@@ -81,8 +86,22 @@ class Client(DatagramProtocol):
         connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, time.time(), 
                     self.host, self.port, ConnectionStatus.CONNECTED)
         signature = connection_transaction.sign_transaction(self.PRIVATE_KEY)
-        signature = str(base64.b64encode(signature))[2:-1] # removes b' from signature
-        print(signature)
+        transaction_hash = connection_transaction.calculate_hash()
+        answer = self.verify_signature(self.PUBLIC_KEY, signature, transaction_hash)
+        print(answer)
+
+    def verify_signature(self, public_key: RSA.RsaKey, signature, transaction_hash: SHA256.SHA256Hash):
+        '''
+        Verifies with a public key from whom the data came that it was indeed 
+        signed by their private key
+        param: public_key imported from pem public key importKey() method
+        param: signature 
+        param: transaction hash
+        return: Boolean. True if the signature is valid; False otherwise. 
+        '''
+        signer = PKCS1_v1_5.new(public_key) 
+        answer = signer.verify(transaction_hash, signature)
+        return answer
 
     # custom realization of GET/POST methods in UDP network
     def get_data(self, address_to_request: Tuple[str, int], file_name: str) -> None:
@@ -120,9 +139,6 @@ class Client(DatagramProtocol):
         """
         keys_length = 1024
         keys = RSA.generate(keys_length)
-        # self.KEYS = keys
-        # private_key = ''.join(keys.export_key().decode().split('\n')[1:-1])
-        # public_key = ''.join(keys.publickey().export_key().decode().split('\n')[1:-1])
         return keys.publickey(), keys
         
     def initialize_keys(self) -> Tuple[str, str]:
