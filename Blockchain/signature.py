@@ -31,3 +31,9 @@ class Signature:
 
     def get_decoded_format(self) -> str:
         return base64.b64encode(self.signature).decode('utf-8')
+
+    def __eq__(self, signature) -> bool:
+        if self.get_decoded_format() == signature.get_decoded_format():
+            return True
+
+        return False

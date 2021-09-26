@@ -9,6 +9,7 @@ from blockchain.encryption_key import EncryptionKey
 from chat.get_request import GET
 from chat.post_request import POST
 from typing import List, Tuple
+from datetime import datetime
 import json
 import time
 
@@ -81,7 +82,7 @@ class Client(DatagramProtocol):
         from which it gets information about online users
         :param server: (server_ip, server_port)
         """
-        connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, time.time(), 
+        connection_transaction = ConnectionTransaction(self.PUBLIC_KEY, self.get_current_timestamp(), 
                     self.host, self.port, ConnectionStatus.CONNECTED)
         connection_transaction.sign_transaction(self.PRIVATE_KEY)
 
@@ -93,6 +94,7 @@ class Client(DatagramProtocol):
     def notify_file_updated(self, file_name: str) -> None:
         # when recieve pending transaction file it checks for new transactions
         # if there are active transactions then add them to the file and broadcast file
+        data = ''
         if file_name == self.PENDING_TRANSACTIONS_FILE and self.new_transactions:
             with open(self.PENDING_TRANSACTIONS_FILE, 'r') as file:
                 data = json.load(file)
@@ -131,6 +133,10 @@ class Client(DatagramProtocol):
 
         raise Exception(f'error: undefined request type: {request_type}')
 
+    def get_current_timestamp(self):
+        now = datetime.now()
+        timestamp = datetime.timestamp(now)
+        return timestamp
 
 if __name__ == '__main__':
     # user_address = UserAddress().get_result()

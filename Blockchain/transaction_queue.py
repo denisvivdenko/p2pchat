@@ -1,4 +1,5 @@
 from blockchain.transaction import Transaction
+from blockchain.connection_transaction_json_converter import JSONConnectionTransactionConverter
 from typing import List
 import json
 
@@ -15,15 +16,18 @@ class TransactionQueue:
         pass
 
     def update_queue(self, file_path: str=None, json_data: str=None):
+        if (file_path is None) or (json_data is None):
+            raise Exception("data haven't been specified")
+
         key_name = 'pending_transactions'
+        transactions = []
         if isinstance(file_path, str):
             with open(file_path, 'r') as file:
                 transactions = json.load(file)[key_name]
-                
         elif issubclass(json_data, str):
             transactions = json.load(json_data)[key_name]
 
-        raise Exception("unable to update queue. you haven't specified new data")
+        return map(lambda x: JSONConnectionTransactionConverter(x).get_result(), transactions)
 
     def __getitem__(self, transaction_index):
         return self._trasactions[transaction_index]
