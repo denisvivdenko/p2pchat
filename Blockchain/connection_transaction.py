@@ -61,6 +61,12 @@ class ConnectionTransaction(Transaction):
         hash = SHA256.new(data=transaction_message.encode('utf-8'))
         return hash
 
+    def __hash__(self):
+        return hash(str(self.get_transaction_object()))
+
+    def __getitem__(self, key_value):
+        return self.get_transaction_object()[key_value]
+
     def __eq__(self, transaction: Transaction) -> bool:
         if type(transaction) is not type(self) or \
                 self.time != transaction.time or \
